@@ -1,0 +1,363 @@
+CAB USER APP — API REFERENCE
+Backend base URL (local): http://localhost:5000/api
+Authentication: send `Authorization: Bearer <access_token>` on protected endpoints.
+Content-Type: application/json unless endpoint says multipart/form-data.
+Success format: {"status":true,"message":"...","data":{...}}
+Error format: {"status":false,"message":"...","code":"..."}
+
+IMPORTANT
+- Replace localhost with your deployed backend URL when hosted.
+- OTP_DEV_MODE=true is for local development only; OTP appears in backend console.
+- The PDF does not define a fare-estimate endpoint or fare formula. This backend includes POST /rides/estimates as a provisional integration endpoint; confirm final pricing rules before production.
+- Notifications, driver/admin login, actual dispatch, live sockets, and SMS provider are not complete external integrations.
+- All protected endpoints need a valid Bearer token unless noted otherwise.
+
+============================================================
+1. HEALTH
+============================================================
+GET /health
+Auth: No
+Example:
+curl http://localhost:5000/api/health
+
+============================================================
+2. AUTHENTICATION
+============================================================
+
+POST /auth/register/send-otp
+Auth: No
+Body:
+{"mobile_number":"9876543210"}
+Response data:
+{"otp_session_id":"otp_sess_...","otp_expires_in":300,"resend_after":30}
+
+POST /auth/register/verify-otp
+Auth: No
+Body:
+{"mobile_number":"9876543210","otp_session_id":"otp_sess_...","otp":"1234"}
+Response data:
+{"token":"<verification_token>","verification_token_expires_in":1800}
+
+POST /auth/register
+Auth: No (verification token required)
+Body:
+{"token":"<verification_token>","name":"Rahul Sharma","mobile_number":"9876543210","email":"rahul@example.com","gender":"Male","referral_code":"NECAB50","terms_accepted":true}
+Required: token, name, mobile_number, terms_accepted=true. email/gender/referral_code optional in this backend.
+
+POST /auth/login/send-otp
+Auth: No
+Body:
+{"mobile_number":"9876543210"}
+Response data:
+{"otp_session_id":"otp_sess_...","otp_expires_in":300,"resend_after":30}
+
+POST /auth/login/verify-otp
+Auth: No
+Body:
+{"mobile_number":"9876543210","otp_session_id":"otp_sess_...","otp":"1234"}
+Response data:
+{"user_id":"usr_...","name":"Rahul Sharma","mobile_number":"9876543210","profile_completed":true,"access_token":"<JWT>","token_expires_in":3600}
+
+POST /auth/logout
+Auth: Yes
+Body: {}
+Note: JWT remains valid until expiry in this starter; implement token revocation if immediate logout invalidation is required.
+
+GET /meta/languages
+Auth: No
+Response data:
+{"languages":[{"code":"en","name":"English"},{"code":"hi","name":"हिन्दी"}]}
+
+GET /meta/cancel-reasons
+Auth: Yes
+Response data:
+{"reasons":[{"reason_id":"cr_01","text":"Driver is taking too long"},{"reason_id":"cr_02","text":"Changed my plan"},{"reason_id":"cr_03","text":"Booked by mistake"},{"reason_id":"cr_04","text":"Other"}]}
+
+============================================================
+3. HOME, LOCATION, BANNERS
+============================================================
+
+GET /home?lat=26.9124&long=75.7873
+Auth: Yes
+Returns: location/serviceability, vehicle_types, banners, latest_ride, active_ride, unread_notifications, wallet_balance.
+Note: unread_notifications is currently a placeholder (0).
+
+GET /location/serviceability?lat=26.9124&lng=75.7873
+Auth: Yes
+Returns: is_serviceable, city_id, city_name, message.
+City bounds must be configured in the cities table.
+
+GET /banners?city_id=city_jpr
+Auth: Yes
+Returns: {"banners":[...]}
+
+GET /drivers/nearby?lat=26.9124&lng=75.7873&vehicle_type_id=vt_cab
+Auth: Yes
+Returns up to 10 stored driver location records. This is not a live dispatch service.
+
+GET /places/autocomplete?q=vaishali&lat=26.91&lng=75.78
+Auth: Yes
+Current implementation returns an empty places list and a message. Integrate Google Places or another provider to enable autocomplete.
+
+============================================================
+4. RIDES
+============================================================
+
+POST /rides/estimates
+Auth: Yes
+Provisional endpoint (fare rules pending confirmation).
+Body:
+{
+  "vehicle_type_id":"vt_cab",
+  "pickup":{"latitude":26.9124,"longitude":75.7873,"address":"Vaishali Nagar, Jaipur"},
+  "drop":{"latitude":26.8242,"longitude":75.8122,"address":"Jaipur Airport"}
+}
+Returns: estimate_id, vehicle_type_id, distance_km (approximate), duration_minutes (approximate), estimated_fare, currency.
+Note: Current distance/fare calculation is indicative, not route-provider-based.
+
+POST /rides
+Auth: Yes
+Body:
+{
+  "estimate_id":"est_...",
+  "vehicle_type_id":"vt_cab",
+  "payment_method":"CASH",
+  "promo_code":"WELCOME50",
+  "note_for_driver":"Near main gate",
+  "pickup":{"latitude":26.9124,"longitude":75.7873,"address":"Vaishali Nagar, Jaipur"},
+  "drop":{"latitude":26.8242,"longitude":75.8122,"address":"Jaipur Airport"}
+}
+payment_method: CASH, WALLET, UPI, CARD
+Returns: ride_id, status=SEARCHING, search_timeout_seconds=90, estimated_fare, discount.
+Note: Connect a real driver dispatch system to assign drivers and update ride status.
+
+GET /rides/latest
+Auth: Yes
+Returns latest completed/cancelled ride or null.
+
+GET /rides/active
+Auth: Yes
+Returns active ride or null.
+
+GET /rides?status=COMPLETED&page=1&limit=20
+Auth: Yes
+Supported filters in this implementation: COMPLETED, CANCELLED_BY_USER, CANCELLED_BY_DRIVER, SCHEDULED.
+Returns rides and pagination.
+
+GET /rides/{ride_id}
+Auth: Yes
+Returns ride details, pickup/drop, driver/vehicle if assigned, ride OTP before trip starts, fare, payment, timeline.
+
+POST /rides/{ride_id}/cancel
+Auth: Yes
+Body:
+{"reason_id":"cr_02","note":"Changed my plan"}
+Cancellation is allowed only before trip starts. Current cancellation fee is 0; configure policy in backend.
+
+GET /rides/{ride_id}/track
+Auth: Yes
+Returns status and stored driver location when available. ETA and route_polyline are placeholders pending map/routing integration.
+
+POST /rides/{ride_id}/share
+Auth: Yes
+Body: {}
+Returns share_url and expires_at. Build a public tracking page to make share URL usable.
+
+POST /rides/{ride_id}/sos
+Auth: Yes
+Body:
+{"latitude":26.9124,"longitude":75.7873}
+Returns sos_id. Admin alert and emergency SMS must be integrated separately.
+
+POST /rides/{ride_id}/rating
+Auth: Yes
+Body:
+{"rating":5,"tags":["Polite","Clean car"],"comment":"Great ride","tip_amount":20}
+Only completed rides can be rated; one rating per ride.
+
+============================================================
+5. PAYMENTS AND WALLET
+============================================================
+
+GET /payments/methods
+Auth: Yes
+Returns enabled payment methods and wallet balance. UPI/Card are marked enabled only when Razorpay key is configured.
+
+POST /rides/{ride_id}/pay
+Auth: Yes
+Body:
+{"payment_method":"UPI"}
+Allowed values: UPI, CARD
+Returns gateway, gateway_order_id, amount, currency, gateway_key, payment_ref.
+Razorpay credentials required.
+
+POST /payments/verify
+Auth: Yes
+Body:
+{"gateway_order_id":"order_xxx","gateway_payment_id":"pay_xxx","razorpay_signature":"<signature from checkout>"}
+Returns payment_status=PAID after server-side signature verification.
+IMPORTANT: Implement and verify Razorpay webhooks before production.
+
+GET /wallet
+Auth: Yes
+Returns balance and currency.
+
+POST /wallet/topup
+Auth: Yes
+Body:
+{"amount":500}
+Starter limits: ₹10 to ₹50,000. Returns Razorpay order details; credentials required.
+
+GET /wallet/transactions?page=1&limit=20
+Auth: Yes
+Returns transactions and pagination fields page/limit.
+
+============================================================
+6. PROFILE AND ACCOUNT
+============================================================
+
+GET /profile
+Auth: Yes
+Returns user profile fields and wallet_balance.
+
+PUT /profile
+Auth: Yes
+Body example:
+{"name":"Rahul Sharma","email":"rahul.new@example.com","gender":"Male","language":"hi"}
+Only supplied fields are updated. gender should be Male/Female/Other per schema.
+
+POST /profile/photo
+Auth: Yes
+Content-Type: multipart/form-data
+Field: photo (JPG/PNG, max 5 MB)
+Current implementation validates upload but returns PHOTO_STORAGE_NOT_CONFIGURED until object storage is connected.
+
+DELETE /profile/photo
+Auth: Yes
+Removes profile photo URL.
+
+POST /profile/phone/send-otp
+Auth: Yes
+Body:
+{"new_mobile_number":"9123456780"}
+Returns OTP session details.
+
+POST /profile/phone/verify-otp
+Auth: Yes
+Body:
+{"new_mobile_number":"9123456780","otp_session_id":"otp_sess_...","otp":"1234"}
+Changes number after successful OTP verification.
+
+PATCH /profile/location
+Auth: Yes
+Body:
+{"latitude":26.9124,"longitude":75.7873}
+Updates current coordinates; reverse geocoding/address lookup is not connected.
+
+POST /profile/delete-request/send-otp
+Auth: Yes
+Body: {}
+Sends OTP for account deletion to the user's current registered number.
+
+POST /profile/delete-request
+Auth: Yes
+Body:
+{"reason":"Not using the app","otp_session_id":"otp_sess_...","otp":"1234"}
+Returns status=SCHEDULED and deletion_date. Active rides block deletion.
+Note: Actual scheduled deletion worker and audit policy must be implemented.
+
+============================================================
+7. SAVED ADDRESSES AND PROMOS
+============================================================
+
+GET /addresses
+Auth: Yes
+Returns saved addresses.
+
+POST /addresses
+Auth: Yes
+Body:
+{"label":"WORK","name":"Office","address":"Jaipur, Rajasthan","latitude":26.9124,"longitude":75.7873}
+label: HOME, WORK, OTHER
+
+PUT /addresses/{address_id}
+Auth: Yes
+Body may include any fields:
+{"label":"HOME","name":"Home","address":"Updated address","latitude":26.91,"longitude":75.78}
+
+DELETE /addresses/{address_id}
+Auth: Yes
+Deletes a saved address belonging to the current user.
+
+GET /promos
+Auth: Yes
+Returns currently active promos.
+
+POST /promos/validate
+Auth: Yes
+Body:
+{"promo_code":"WELCOME50","estimate_id":"est_xxx","vehicle_type_id":"vt_cab","estimated_fare":420}
+Note: This backend requires estimated_fare because the PDF did not define an estimate lookup API. Do not trust client-supplied fare in production; validate estimates server-side.
+
+============================================================
+8. SUPPORT AND EMERGENCY CONTACTS
+============================================================
+
+GET /support/faqs
+Auth: Yes
+Returns active FAQs.
+
+POST /support/tickets
+Auth: Yes
+Body:
+{"category":"PAYMENT","ride_id":"ride_xxx","subject":"Overcharged","message":"Please check my fare."}
+category: RIDE, PAYMENT, DRIVER, APP, OTHER
+Returns ticket_id and status.
+
+GET /support/tickets
+Auth: Yes
+Returns current user's tickets.
+
+GET /support/tickets/{ticket_id}
+Auth: Yes
+Returns ticket details and message thread.
+
+POST /support/tickets/{ticket_id}/reply
+Auth: Yes
+Body:
+{"message":"Please share an update."}
+Cannot reply to a resolved ticket.
+
+GET /support/emergency-contacts
+Auth: Yes
+Returns saved emergency contacts.
+
+POST /support/emergency-contacts
+Auth: Yes
+Body:
+{"name":"Mom","mobile_number":"9876543210"}
+Maximum 5 contacts per user.
+
+DELETE /support/emergency-contacts/{contact_id}
+Auth: Yes
+Deletes a contact belonging to the current user.
+
+============================================================
+9. EXAMPLE AUTHENTICATED REQUEST
+============================================================
+curl -X GET "http://localhost:5000/api/profile" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+
+============================================================
+10. ROUTES NOT YET IMPLEMENTED / EXTERNAL DEPENDENCIES
+============================================================
+- Fare policy and road-distance/time calculation need business decisions and routing provider.
+- Driver assignment/dispatch, driver/admin authentication, and driver status transitions.
+- Live socket tracking and actual ETA/polyline.
+- Real SMS gateway and OTP delivery.
+- Push notification APIs/events (PDF says these will be specified later).
+- Razorpay webhook endpoint and reconciliation.
+- Object storage for profile photos.
+- Public share-trip page, SOS support alert/SMS, scheduled account deletion worker.
+- Invoice PDF / receipt URL generation.
+- Admin CRUD endpoints for cities, vehicle pricing, banners, promos, drivers, FAQs, and ride management.
