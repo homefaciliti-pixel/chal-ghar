@@ -3,6 +3,8 @@ const jwt = require('jsonwebtoken');
 const db = require('../config/db');
 const { fail } = require('../utils/http');
 
+const mockStore = require('../services/mock.store');
+
 const mockMode = process.env.MOCK_MODE === 'true';
 
 module.exports = async function auth(req, res, next) {
@@ -59,10 +61,12 @@ module.exports = async function auth(req, res, next) {
 
     // 4. Mock authentication for local development only
     if (mockMode) {
-      req.user = {
+      const mockUser = mockStore.getUserById(payload.sub) || mockStore.getUserByMobile(payload.sub);
+      req.user = mockUser || {
         id: payload.sub,
         user_id: payload.user_id,
-        mobile_number: null,
+        name: 'Rahul Sharma',
+        mobile_number: '9876543210',
         is_active: true,
       };
 

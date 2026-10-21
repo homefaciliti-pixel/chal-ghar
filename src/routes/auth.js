@@ -6,10 +6,9 @@ const otpService = require('../services/otp.service');
 const auth = require('../middleware/auth');
 const { ok, fail, id, asyncHandler } = require('../utils/http');
 
-const mockMode = process.env.MOCK_MODE === 'true';
+const mockStore = require('../services/mock.store');
 
-// Temporary in-memory users. Data is lost when the server restarts.
-const mockUsers = new Map();
+const mockMode = process.env.MOCK_MODE === 'true';
 
 const validMobile = (value) =>
   typeof value === 'string' &&
@@ -34,23 +33,11 @@ const tokenFor = (user) => {
 };
 
 function findMockUser(mobile) {
-  return mockUsers.get(mobile);
+  return mockStore.getUserByMobile(mobile);
 }
 
-function createMockUser(mobile, name = 'Test User') {
-  const user = {
-    id: mockUsers.size + 1,
-    user_id: id('usr'),
-    name,
-    mobile_number: mobile,
-    is_active: true,
-    profile_completed: false,
-    phone_verified: true,
-    referral_code: id('ref').slice(0, 12).toUpperCase(),
-  };
-
-  mockUsers.set(mobile, user);
-  return user;
+function createMockUser(mobile, name = 'Test User', extra = {}) {
+  return mockStore.createMockUser(mobile, name, extra);
 }
 
 // ==========================================
