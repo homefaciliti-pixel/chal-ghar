@@ -108,16 +108,36 @@ router.post(
   '/estimates',
   auth,
   asyncHandler(async (req, res) => {
-    const { pickup, drop, vehicle_type_id } = req.body;
+    const body = req.body || {};
+    const pickup = body.pickup || {
+      latitude: body.pickup_lat ?? body.pickup_latitude,
+      longitude: body.pickup_lng ?? body.pickup_longitude,
+      address: body.pickup_address
+    };
+    const drop = body.drop || {
+      latitude: body.drop_lat ?? body.drop_latitude,
+      longitude: body.drop_lng ?? body.drop_longitude,
+      address: body.drop_address
+    };
+    const vehicle_type_id = body.vehicle_type_id || body.vehicle_type;
+
     if (
       !pickup ||
       !drop ||
-      !vehicle_type_id ||
       ![pickup.latitude, pickup.longitude, drop.latitude, drop.longitude].every((x) => Number.isFinite(Number(x)))
     ) {
-      return fail(res, 422, 'pickup, drop coordinates and vehicle_type_id are required', 'VALIDATION_ERROR');
+      return fail(res, 422, 'pickup and drop coordinates (latitude and longitude) are required', 'VALIDATION_ERROR');
     }
-    return ok(res, await estimate({ pickup, drop, vehicleTypeId: vehicle_type_id }), 'Estimate created');
+
+    if (vehicle_type_id) {
+      return ok(res, await estimate({ pickup, drop, vehicleTypeId: vehicle_type_id }), 'Estimate created');
+    }
+
+    const types = ['AUTO', 'MINI', 'SEDAN'];
+    const estimates = await Promise.all(
+      types.map((vt) => estimate({ pickup, drop, vehicleTypeId: vt }))
+    );
+    return ok(res, { estimates }, 'Estimates created');
   })
 );
 

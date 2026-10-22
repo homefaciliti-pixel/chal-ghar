@@ -53,7 +53,7 @@ app.use(
 // HEALTH CHECK - NO DATABASE
 // ================================
 
-app.get('/api/health', (req, res) => {
+app.get(['/api/health', '/health'], (req, res) => {
   return res.status(200).json({
     status: true,
     message: 'CAB User API is running',
@@ -67,24 +67,24 @@ app.get('/api/health', (req, res) => {
 });
 
 // ================================
-// API ROUTES
+// API ROUTES (Supports both /api/* and /*)
 // ================================
 
-app.use('/api/auth', require('./routes/auth'));
+app.use(['/api/auth', '/auth'], require('./routes/auth'));
 
-app.use('/api/meta', require('./routes/meta'));
+app.use(['/api/meta', '/meta'], require('./routes/meta'));
 
-app.use('/api', require('./routes/home'));
+app.use(['/api/rides', '/rides'], require('./routes/rides'));
 
-app.use('/api/rides', require('./routes/rides'));
+app.use(['/api/profile', '/profile'], require('./routes/profile'));
 
-app.use('/api', require('./routes/wallet-payments'));
+app.use(['/api/support', '/support'], require('./routes/support'));
 
-app.use('/api/profile', require('./routes/profile'));
+app.use(['/api', '/'], require('./routes/home'));
 
-app.use('/api', require('./routes/addresses-promos'));
+app.use(['/api', '/'], require('./routes/wallet-payments'));
 
-app.use('/api/support', require('./routes/support'));
+app.use(['/api', '/'], require('./routes/addresses-promos'));
 
 // ================================
 // 404 - ROUTE NOT FOUND

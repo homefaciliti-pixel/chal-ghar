@@ -54,6 +54,9 @@ const vehicleTypes = [
     name: 'Auto',
     icon_url: 'https://cdn-icons-png.flaticon.com/512/3202/3202926.png',
     capacity: 3,
+    base_fare: 35,
+    per_km: 12,
+    per_minute: 1,
     nearest_eta_minutes: 3,
     is_available: 1
   },
@@ -62,6 +65,9 @@ const vehicleTypes = [
     name: 'Mini Cab',
     icon_url: 'https://cdn-icons-png.flaticon.com/512/75/75780.png',
     capacity: 4,
+    base_fare: 50,
+    per_km: 14,
+    per_minute: 1.5,
     nearest_eta_minutes: 5,
     is_available: 1
   },
@@ -70,7 +76,65 @@ const vehicleTypes = [
     name: 'Sedan Prime',
     icon_url: 'https://cdn-icons-png.flaticon.com/512/3202/3202926.png',
     capacity: 4,
+    base_fare: 70,
+    per_km: 18,
+    per_minute: 2,
     nearest_eta_minutes: 7,
+    is_available: 1
+  },
+  {
+    vehicle_type_id: 'CAB',
+    name: 'Cab',
+    icon_url: 'https://cdn-icons-png.flaticon.com/512/75/75780.png',
+    capacity: 4,
+    base_fare: 50,
+    per_km: 14,
+    per_minute: 1.5,
+    nearest_eta_minutes: 6,
+    is_available: 1
+  },
+  {
+    vehicle_type_id: 'BIKE',
+    name: 'Bike',
+    icon_url: 'https://cdn-icons-png.flaticon.com/512/3198/3198344.png',
+    capacity: 1,
+    base_fare: 25,
+    per_km: 8,
+    per_minute: 0.5,
+    nearest_eta_minutes: 3,
+    is_available: 1
+  },
+  {
+    vehicle_type_id: 'vt_auto',
+    name: 'Auto',
+    icon_url: 'https://cdn-icons-png.flaticon.com/512/3202/3202926.png',
+    capacity: 3,
+    base_fare: 35,
+    per_km: 12,
+    per_minute: 1,
+    nearest_eta_minutes: 4,
+    is_available: 1
+  },
+  {
+    vehicle_type_id: 'vt_bike',
+    name: 'Bike',
+    icon_url: 'https://cdn-icons-png.flaticon.com/512/3198/3198344.png',
+    capacity: 1,
+    base_fare: 25,
+    per_km: 8,
+    per_minute: 0.5,
+    nearest_eta_minutes: 3,
+    is_available: 1
+  },
+  {
+    vehicle_type_id: 'vt_cab',
+    name: 'Cab',
+    icon_url: 'https://cdn-icons-png.flaticon.com/512/75/75780.png',
+    capacity: 4,
+    base_fare: 50,
+    per_km: 14,
+    per_minute: 1.5,
+    nearest_eta_minutes: 6,
     is_available: 1
   }
 ];
