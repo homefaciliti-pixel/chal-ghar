@@ -36,7 +36,7 @@ router.get(
 
       return ok(res, {
         location: { latitude: lat, longitude: lng, address: null, city_id: 'city_01', is_serviceable: true },
-        vehicle_types: mockStore.vehicleTypes,
+        vehicle_types: mockStore.primaryVehicleTypes,
         banners: mockStore.banners,
         latest_ride: mapRide(latest),
         active_ride: active ? { ride_id: active.ride_id, status: active.status } : null,
@@ -154,7 +154,16 @@ router.get(
     if (mockMode) {
       let d = [...mockStore.drivers];
       if (req.query.vehicle_type_id) {
-        d = d.filter((x) => x.vehicle_type_id === req.query.vehicle_type_id);
+        const qType = req.query.vehicle_type_id.toUpperCase();
+        d = d.filter((x) => {
+          const xType = x.vehicle_type_id.toUpperCase();
+          return (
+            xType === qType ||
+            (qType.includes('BIKE') && xType.includes('BIKE')) ||
+            (qType.includes('AUTO') && xType.includes('AUTO')) ||
+            (qType.includes('CAB') && (xType.includes('CAB') || xType === 'MINI' || xType === 'SEDAN'))
+          );
+        });
       }
       d.sort((a, b) => Math.hypot(a.latitude - lat, a.longitude - lng) - Math.hypot(b.latitude - lat, b.longitude - lng));
       return ok(res, { drivers: d });
@@ -171,6 +180,17 @@ router.get(
 
 router.get('/places/autocomplete', auth, async (req, res) =>
   ok(res, { places: [], message: 'Connect Google Places API/provider to enable autocomplete' })
+);
+
+router.get(
+  ['/vehicle-types', '/vehicle_types', '/vehicles'],
+  asyncHandler(async (req, res) => {
+    if (mockMode) {
+      return ok(res, { vehicle_types: mockStore.primaryVehicleTypes });
+    }
+    const [v] = await db.query(vehicleQuery);
+    return ok(res, { vehicle_types: v });
+  })
 );
 
 module.exports = router;

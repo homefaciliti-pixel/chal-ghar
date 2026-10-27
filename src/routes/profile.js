@@ -6,10 +6,24 @@ const mockStore = require('../services/mock.store');
 const { ok, fail, id, asyncHandler } = require('../utils/http');
 const multer = require('multer');
 
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const fs = require('fs');
+    const path = require('path');
+    const dir = path.join(__dirname, '../../uploads');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const ext = file.mimetype === 'image/png' ? '.png' : '.jpg';
+    cb(null, `profile_${req.user?.id || 'usr'}_${Date.now()}${ext}`);
+  }
+});
+
 const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => cb(null, ['image/jpeg', 'image/png'].includes(file.mimetype))
+  storage,
+  limits: { fileSize: 8 * 1024 * 1024 }, // 8 MB limit
+  fileFilter: (req, file, cb) => cb(null, ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'].includes(file.mimetype))
 });
 
 const mockMode = process.env.MOCK_MODE === 'true';
@@ -112,13 +126,14 @@ router.post(
   '/photo',
   upload.single('photo'),
   asyncHandler(async (req, res) => {
-    if (!req.file) return fail(res, 400, 'JPG or PNG photo (max 5 MB) is required', 'INVALID_FILE_TYPE');
+    if (!req.file) return fail(res, 400, 'JPG, PNG or WEBP photo (max 8 MB) is required', 'INVALID_FILE_TYPE');
+    const photoUrl = `/uploads/${req.file.filename}`;
     if (mockMode) {
-      const mockUrl = `https://chal-ghar.onrender.com/uploads/photo_${Date.now()}.jpg`;
-      mockStore.updateUser(req.user.id, { profile_photo_url: mockUrl });
-      return ok(res, { profile_photo_url: mockUrl }, 'Photo uploaded successfully');
+      mockStore.updateUser(req.user.id, { profile_photo_url: photoUrl });
+      return ok(res, { profile_photo_url: photoUrl }, 'Photo uploaded successfully');
     }
-    return fail(res, 501, 'Connect S3/Cloudinary/object storage to persist the uploaded photo', 'PHOTO_STORAGE_NOT_CONFIGURED');
+    await db.query('UPDATE users SET profile_photo_url=? WHERE id=?', [photoUrl, req.user.id]);
+    return ok(res, { profile_photo_url: photoUrl }, 'Photo uploaded successfully');
   })
 );
 
@@ -238,8 +253,9 @@ router.post(
       const user = mockStore.getUserById(req.user.id);
       const mobile = mobile_number || user?.mobile_number || '9876543210';
       await otp.verifyOtp(otp_session_id, mobile, 'DELETE_ACCOUNT', code);
-      const date = new Date(Date.now() + 13 * 86400000).toISOString().slice(0, 10);
-      return ok(res, { status: 'SCHEDULED', deletion_date: date }, 'Account deletion scheduled');
+      mockStore.deleteUser(req.user.id);
+      const date = new Date().toISOString().slice(0, 10);
+      return ok(res, { status: 'DELETED', deletion_date: date }, 'Account deleted successfully');
     }
     const [u] = await db.query('SELECT mobile_number FROM users WHERE id=?', [req.user.id]);
     await otp.verifyOtp(otp_session_id, mobile_number || u[0].mobile_number, 'DELETE_ACCOUNT', code);
@@ -248,9 +264,9 @@ router.post(
       [req.user.id]
     );
     if (active.length) return fail(res, 409, 'Cannot delete account while an active ride exists', 'ACTIVE_RIDE_EXISTS');
-    const date = new Date(Date.now() + 13 * 86400000).toISOString().slice(0, 10);
-    await db.query("UPDATE users SET deletion_status='SCHEDULED',deletion_date=? WHERE id=?", [date, req.user.id]);
-    return ok(res, { status: 'SCHEDULED', deletion_date: date }, 'Account deletion scheduled');
+    const date = new Date().toISOString().slice(0, 10);
+    await db.query("UPDATE users SET is_active=FALSE, deletion_status='COMPLETED', deletion_date=? WHERE id=?", [date, req.user.id]);
+    return ok(res, { status: 'DELETED', deletion_date: date }, 'Account deleted successfully');
   })
 );
 

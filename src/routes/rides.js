@@ -133,7 +133,7 @@ router.post(
       return ok(res, await estimate({ pickup, drop, vehicleTypeId: vehicle_type_id }), 'Estimate created');
     }
 
-    const types = ['AUTO', 'MINI', 'SEDAN'];
+    const types = ['BIKE', 'AUTO', 'MINI', 'SEDAN'];
     const estimates = await Promise.all(
       types.map((vt) => estimate({ pickup, drop, vehicleTypeId: vt }))
     );

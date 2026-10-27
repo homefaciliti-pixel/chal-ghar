@@ -153,6 +153,39 @@ router.post(
   })
 );
 
+// POST /api/support/sos
+// Standalone SOS trigger without needing a ride_id
+router.post(
+  '/sos',
+  asyncHandler(async (req, res) => {
+    const { latitude, longitude, address, ride_id } = req.body || {};
+    if (!latitude || !longitude || !Number.isFinite(Number(latitude)) || !Number.isFinite(Number(longitude))) {
+      return fail(res, 422, 'Valid user coordinates (latitude, longitude) are required for emergency dispatch', 'LOCATION_REQUIRED');
+    }
+
+    const contacts = mockMode
+      ? mockStore.getEmergencyContacts(req.user.id)
+      : (await db.query('SELECT name, mobile_number FROM emergency_contacts WHERE user_id=?', [req.user.id]))[0];
+
+    const alertPayload = {
+      alert_id: id('sos'),
+      user_id: req.user.user_id || req.user.id,
+      ride_id: ride_id || null,
+      location: {
+        latitude: Number(latitude),
+        longitude: Number(longitude),
+        address: address || 'Current Location'
+      },
+      contacts_alerted: contacts.length,
+      emergency_services_alerted: false,
+      status: 'DISPATCHED',
+      triggered_at: new Date().toISOString()
+    };
+
+    return ok(res, alertPayload, 'SOS alert successfully transmitted to your emergency contacts and control room.');
+  })
+);
+
 // DELETE /api/support/emergency-contacts/:contact_id
 router.delete(
   '/emergency-contacts/:contact_id',

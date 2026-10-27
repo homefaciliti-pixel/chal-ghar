@@ -148,7 +148,8 @@ router.post(
       const p = mockStore.promos.find((x) => x.code === promo_code.toUpperCase());
       if (!p) return fail(res, 400, 'Invalid or expired promo', 'INVALID_PROMO');
       if (fare < Number(p.min_fare)) return fail(res, 400, 'Minimum fare condition not met', 'PROMO_MIN_FARE_NOT_MET');
-      let discount = p.discount_type === 'FLAT' ? Number(p.discount_value) : (fare * Number(p.discount_value)) / 100;
+      const isFlat = p.discount_type === 'FLAT';
+      let discount = isFlat ? Number(p.discount_value) : (fare * Number(p.discount_value)) / 100;
       if (p.max_discount != null) discount = Math.min(discount, Number(p.max_discount));
       discount = Math.min(discount, fare);
       return ok(res, {
@@ -167,7 +168,8 @@ router.post(
     if (!p.length) return fail(res, 400, 'Invalid or expired promo', 'INVALID_PROMO');
     const x = p[0];
     if (fare < Number(x.min_fare)) return fail(res, 400, 'Minimum fare condition not met', 'PROMO_MIN_FARE_NOT_MET');
-    let discount = x.discount_type === 'FLAT' ? Number(x.discount_value) : (fare * Number(x.discount_value)) / 100;
+    const isFlat = x.discount_type === 'FLAT';
+    let discount = isFlat ? Number(x.discount_value) : (fare * Number(x.discount_value)) / 100;
     if (x.max_discount != null) discount = Math.min(discount, Number(x.max_discount));
     discount = Math.min(discount, fare);
     return ok(res, {

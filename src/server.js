@@ -6,6 +6,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 
+const path = require('path');
 const errorHandler = require('./middleware/error');
 
 const app = express();
@@ -27,8 +28,20 @@ app.use(
   })
 );
 
-app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+// Capture raw body for webhook verification
+app.use(
+  express.json({
+    limit: '10mb',
+    verify: (req, res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Serve static uploaded photos
+const uploadsDir = path.join(__dirname, '../uploads');
+app.use('/uploads', express.static(uploadsDir));
 
 // ================================
 // AUTH RATE LIMITING
@@ -79,6 +92,8 @@ app.use(['/api/rides', '/rides'], require('./routes/rides'));
 app.use(['/api/profile', '/profile'], require('./routes/profile'));
 
 app.use(['/api/support', '/support'], require('./routes/support'));
+
+app.use(['/api/webhooks', '/webhooks'], require('./routes/webhooks'));
 
 app.use(['/api', '/'], require('./routes/home'));
 

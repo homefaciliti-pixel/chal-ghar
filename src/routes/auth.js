@@ -1,4 +1,6 @@
 
+require('dotenv').config();
+
 const router = require('express').Router();
 const db = require('../config/db');
 const jwt = require('jsonwebtoken');
@@ -13,6 +15,19 @@ const mockMode = process.env.MOCK_MODE === 'true';
 const validMobile = (value) =>
   typeof value === 'string' &&
   /^\+?[0-9]{10,15}$/.test(value);
+
+const validEmail = (value) =>
+  typeof value === 'string' &&
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
+// Calculate token_expires_in in seconds from JWT_EXPIRES_IN env var
+function jwtExpirySeconds() {
+  const raw = process.env.JWT_EXPIRES_IN || '1h';
+  if (/^\d+$/.test(raw)) return Number(raw);
+  const units = { s: 1, m: 60, h: 3600, d: 86400 };
+  const match = raw.match(/^(\d+)([smhd])$/);
+  return match ? Number(match[1]) * (units[match[2]] || 3600) : 3600;
+}
 
 const tokenFor = (user) => {
   if (
@@ -59,9 +74,23 @@ router.post(
     }
 
     if (mockMode) {
-      // Create a temporary test user if one does not exist.
+      // Do NOT auto-create user — login requires prior registration
       if (!findMockUser(mobile_number)) {
-        createMockUser(mobile_number);
+        return fail(
+          res, 404,
+          'Mobile number is not registered. Please register first.',
+          'USER_NOT_FOUND'
+        );
+      }
+
+      // Reject login for deleted/inactive accounts
+      const existingUser = findMockUser(mobile_number);
+      if (existingUser && !existingUser.is_active) {
+        return fail(
+          res, 403,
+          'This account has been deleted. Please register again.',
+          'ACCOUNT_DELETED'
+        );
       }
 
       const result = await otpService.sendOtp(
@@ -73,8 +102,8 @@ router.post(
     }
 
     const [users] = await db.query(
-      `SELECT id FROM users
-       WHERE mobile_number = ? AND is_active = TRUE
+      `SELECT id, is_active, deletion_status FROM users
+       WHERE mobile_number = ?
        LIMIT 1`,
       [mobile_number]
     );
@@ -82,8 +111,16 @@ router.post(
     if (!users.length) {
       return fail(
         res, 404,
-        'Mobile number is not registered',
+        'Mobile number is not registered. Please register first.',
         'USER_NOT_FOUND'
+      );
+    }
+
+    if (!users[0].is_active || users[0].deletion_status === 'COMPLETED') {
+      return fail(
+        res, 403,
+        'This account has been deleted. Please register again.',
+        'ACCOUNT_DELETED'
       );
     }
 
@@ -137,8 +174,16 @@ router.post(
       if (!user) {
         return fail(
           res, 404,
-          'Test user not found. Send OTP again.',
+          'User not found. Please register first.',
           'USER_NOT_FOUND'
+        );
+      }
+
+      if (!user.is_active) {
+        return fail(
+          res, 403,
+          'This account has been deleted.',
+          'ACCOUNT_DELETED'
         );
       }
     } else {
@@ -152,7 +197,7 @@ router.post(
       if (!users.length) {
         return fail(
           res, 404,
-          'User not found',
+          'User not found or account is inactive.',
           'USER_NOT_FOUND'
         );
       }
@@ -170,7 +215,7 @@ router.post(
         mobile_number: user.mobile_number,
         profile_completed: Boolean(user.profile_completed),
         access_token,
-        token_expires_in: 3600,
+        token_expires_in: jwtExpirySeconds(),
       },
       'Login successful'
     );
@@ -196,7 +241,8 @@ router.post(
     }
 
     if (mockMode) {
-      if (findMockUser(mobile_number)) {
+      const existing = findMockUser(mobile_number);
+      if (existing && existing.is_active) {
         return fail(
           res, 409,
           'Mobile number already registered',
@@ -213,7 +259,7 @@ router.post(
     }
 
     const [users] = await db.query(
-      'SELECT id FROM users WHERE mobile_number = ? LIMIT 1',
+      'SELECT id FROM users WHERE mobile_number = ? AND is_active = TRUE LIMIT 1',
       [mobile_number]
     );
 
@@ -299,12 +345,8 @@ router.post(
       terms_accepted,
     } = req.body || {};
 
-    if (
-      !token ||
-      !mobile_number ||
-      !name ||
-      terms_accepted !== true
-    ) {
+    // Validate required fields
+    if (!token || !mobile_number || !name || terms_accepted !== true) {
       return fail(
         res, 422,
         'token, mobile_number, name and terms_accepted=true are required',
@@ -316,6 +358,22 @@ router.post(
       return fail(
         res, 422,
         'Valid mobile number and name are required',
+        'VALIDATION_ERROR'
+      );
+    }
+
+    if (email && !validEmail(email)) {
+      return fail(
+        res, 422,
+        'Invalid email address format',
+        'VALIDATION_ERROR'
+      );
+    }
+
+    if (name.trim().length < 2 || name.trim().length > 120) {
+      return fail(
+        res, 422,
+        'Name must be between 2 and 120 characters',
         'VALIDATION_ERROR'
       );
     }
@@ -332,7 +390,7 @@ router.post(
     ) {
       return fail(
         res, 401,
-        'Invalid or expired verification token',
+        'Invalid or expired verification token. Please verify your OTP again.',
         'INVALID_VERIFICATION_TOKEN'
       );
     }
@@ -340,7 +398,8 @@ router.post(
     let user;
 
     if (mockMode) {
-      if (findMockUser(mobile_number)) {
+      const existing = findMockUser(mobile_number);
+      if (existing && existing.is_active) {
         return fail(
           res, 409,
           'Mobile number already registered',
@@ -348,24 +407,55 @@ router.post(
         );
       }
 
-      user = createMockUser(mobile_number, name.trim());
+      // Check email uniqueness in mock store
+      if (email) {
+        const emailConflict = mockStore.getUserByEmail(email);
+        if (emailConflict && emailConflict.is_active) {
+          return fail(
+            res, 409,
+            'Email address is already registered',
+            'EMAIL_ALREADY_EXISTS'
+          );
+        }
+      }
+
+      user = createMockUser(mobile_number, name.trim(), {
+        email: email || null,
+        gender: gender || null,
+      });
       user.email = email || null;
       user.gender = gender || null;
       user.referral_code = id('ref').slice(0, 12).toUpperCase();
       user.referred_by = referral_code || null;
       user.profile_completed = true;
+      user.terms_accepted = true;
     } else {
-      const [existing] = await db.query(
-        'SELECT id FROM users WHERE mobile_number = ? LIMIT 1',
+      const [existingMobile] = await db.query(
+        'SELECT id FROM users WHERE mobile_number = ? AND is_active = TRUE LIMIT 1',
         [mobile_number]
       );
 
-      if (existing.length) {
+      if (existingMobile.length) {
         return fail(
           res, 409,
           'Mobile number already registered',
           'MOBILE_ALREADY_EXISTS'
         );
+      }
+
+      // Check email uniqueness
+      if (email) {
+        const [existingEmail] = await db.query(
+          'SELECT id FROM users WHERE email = ? AND is_active = TRUE LIMIT 1',
+          [email]
+        );
+        if (existingEmail.length) {
+          return fail(
+            res, 409,
+            'Email address is already registered',
+            'EMAIL_ALREADY_EXISTS'
+          );
+        }
       }
 
       const userId = id('usr');
@@ -393,7 +483,7 @@ router.post(
         user_id: userId,
       };
 
-      // Consume the verification token.
+      // Consume the verification token
       await db.query(
         `UPDATE otp_sessions
          SET verification_token_hash = NULL
@@ -409,7 +499,7 @@ router.post(
       {
         user_id: user.user_id,
         access_token,
-        token_expires_in: 3600,
+        token_expires_in: jwtExpirySeconds(),
       },
       'Registration successful',
       201
@@ -426,7 +516,9 @@ router.post(
   '/logout',
   auth,
   asyncHandler(async (req, res) => {
-    return ok(res, {}, 'Logout successful');
+    // For stateless JWTs, instruct client to discard the token.
+    // If token blacklisting is needed, store token jti in Redis/DB here.
+    return ok(res, {}, 'Logout successful. Please discard your access token.');
   })
 );
 

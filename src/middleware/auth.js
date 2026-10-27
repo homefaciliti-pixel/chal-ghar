@@ -62,6 +62,9 @@ module.exports = async function auth(req, res, next) {
     // 4. Mock authentication for local development only
     if (mockMode) {
       const mockUser = mockStore.getUserById(payload.sub) || mockStore.getUserByMobile(payload.sub);
+      if (mockUser && !mockUser.is_active) {
+        return fail(res, 401, 'Account has been deleted or deactivated', 'ACCOUNT_DELETED');
+      }
       req.user = mockUser || {
         id: payload.sub,
         user_id: payload.user_id,

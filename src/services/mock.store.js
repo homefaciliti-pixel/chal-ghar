@@ -48,7 +48,19 @@ const rides = new Map();
 const supportTickets = new Map();
 const emergencyContacts = new Map();
 
-const vehicleTypes = [
+const primaryVehicleTypes = [
+  {
+    vehicle_type_id: 'BIKE',
+    name: 'Bike',
+    icon_url: 'https://cdn-icons-png.flaticon.com/512/3198/3198344.png',
+    capacity: 1,
+    base_fare: 25,
+    per_km: 8,
+    per_minute: 0.5,
+    nearest_eta_minutes: 2,
+    is_available: 1,
+    description: 'Fast and affordable bike rides for 1 person'
+  },
   {
     vehicle_type_id: 'AUTO',
     name: 'Auto',
@@ -58,7 +70,8 @@ const vehicleTypes = [
     per_km: 12,
     per_minute: 1,
     nearest_eta_minutes: 3,
-    is_available: 1
+    is_available: 1,
+    description: 'Affordable auto rides at your doorstep'
   },
   {
     vehicle_type_id: 'MINI',
@@ -69,7 +82,8 @@ const vehicleTypes = [
     per_km: 14,
     per_minute: 1.5,
     nearest_eta_minutes: 5,
-    is_available: 1
+    is_available: 1,
+    description: 'Comfy hatchbacks for daily commute'
   },
   {
     vehicle_type_id: 'SEDAN',
@@ -80,8 +94,13 @@ const vehicleTypes = [
     per_km: 18,
     per_minute: 2,
     nearest_eta_minutes: 7,
-    is_available: 1
-  },
+    is_available: 1,
+    description: 'Spacious sedans with top drivers'
+  }
+];
+
+const vehicleTypes = [
+  ...primaryVehicleTypes,
   {
     vehicle_type_id: 'CAB',
     name: 'Cab',
@@ -90,29 +109,7 @@ const vehicleTypes = [
     base_fare: 50,
     per_km: 14,
     per_minute: 1.5,
-    nearest_eta_minutes: 6,
-    is_available: 1
-  },
-  {
-    vehicle_type_id: 'BIKE',
-    name: 'Bike',
-    icon_url: 'https://cdn-icons-png.flaticon.com/512/3198/3198344.png',
-    capacity: 1,
-    base_fare: 25,
-    per_km: 8,
-    per_minute: 0.5,
-    nearest_eta_minutes: 3,
-    is_available: 1
-  },
-  {
-    vehicle_type_id: 'vt_auto',
-    name: 'Auto',
-    icon_url: 'https://cdn-icons-png.flaticon.com/512/3202/3202926.png',
-    capacity: 3,
-    base_fare: 35,
-    per_km: 12,
-    per_minute: 1,
-    nearest_eta_minutes: 4,
+    nearest_eta_minutes: 5,
     is_available: 1
   },
   {
@@ -123,6 +120,17 @@ const vehicleTypes = [
     base_fare: 25,
     per_km: 8,
     per_minute: 0.5,
+    nearest_eta_minutes: 2,
+    is_available: 1
+  },
+  {
+    vehicle_type_id: 'vt_auto',
+    name: 'Auto',
+    icon_url: 'https://cdn-icons-png.flaticon.com/512/3202/3202926.png',
+    capacity: 3,
+    base_fare: 35,
+    per_km: 12,
+    per_minute: 1,
     nearest_eta_minutes: 3,
     is_available: 1
   },
@@ -134,7 +142,7 @@ const vehicleTypes = [
     base_fare: 50,
     per_km: 14,
     per_minute: 1.5,
-    nearest_eta_minutes: 6,
+    nearest_eta_minutes: 5,
     is_available: 1
   }
 ];
@@ -168,7 +176,7 @@ const drivers = [
     phone_masked: '+91 98******10',
     vehicle_type: 'Auto',
     vehicle_color: 'Green-Yellow',
-    make_model: 'Bajaj RE',
+    make_model: 'Bajaj RE Compact',
     registration_number: 'AS-01-AB-1234',
     latitude: 26.1550,
     longitude: 91.7700,
@@ -190,6 +198,54 @@ const drivers = [
     longitude: 91.7650,
     vehicle_type_id: 'MINI',
     is_available: 1
+  },
+  {
+    driver_id: 'drv_03',
+    name: 'Rahul Borah',
+    photo_url: null,
+    rating: 4.88,
+    total_trips: 620,
+    phone_masked: '+91 98******33',
+    vehicle_type: 'Bike',
+    vehicle_color: 'Black-Red',
+    make_model: 'Hero Splendor Plus',
+    registration_number: 'AS-01-EF-9012',
+    latitude: 26.1510,
+    longitude: 91.7620,
+    vehicle_type_id: 'BIKE',
+    is_available: 1
+  },
+  {
+    driver_id: 'drv_04',
+    name: 'Rakesh Sharma',
+    photo_url: null,
+    rating: 4.81,
+    total_trips: 940,
+    phone_masked: '+91 98******44',
+    vehicle_type: 'Auto',
+    vehicle_color: 'Yellow-Black',
+    make_model: 'Piaggio Ape',
+    registration_number: 'AS-01-JK-3421',
+    latitude: 26.1530,
+    longitude: 91.7680,
+    vehicle_type_id: 'AUTO',
+    is_available: 1
+  },
+  {
+    driver_id: 'drv_05',
+    name: 'Amit Kalita',
+    photo_url: null,
+    rating: 4.95,
+    total_trips: 1540,
+    phone_masked: '+91 98******55',
+    vehicle_type: 'Sedan Prime',
+    vehicle_color: 'Silver',
+    make_model: 'Honda Amaze',
+    registration_number: 'AS-01-GH-3456',
+    latitude: 26.1620,
+    longitude: 91.7580,
+    vehicle_type_id: 'SEDAN',
+    is_available: 1
   }
 ];
 
@@ -198,7 +254,7 @@ const promos = [
     code: 'NECAB50',
     title: '50% Off First Ride',
     description: 'Get 50% discount up to ₹50',
-    discount_type: 'PERCENTAGE',
+    discount_type: 'PERCENT',
     discount_value: 50,
     max_discount: 50,
     min_fare: 50,
@@ -252,6 +308,25 @@ module.exports = {
 
   getUserByMobile(mobile) {
     return usersByMobile.get(mobile) || null;
+  },
+
+  getUserByEmail(email) {
+    if (!email) return null;
+    for (const u of usersById.values()) {
+      if (u.email && u.email.toLowerCase() === email.toLowerCase()) {
+        return u;
+      }
+    }
+    return null;
+  },
+
+  deleteUser(userId) {
+    const user = this.getUserById(userId);
+    if (!user) return false;
+    user.is_active = false;
+    user.deletion_status = 'COMPLETED';
+    user.deleted_at = new Date().toISOString();
+    return true;
   },
 
   createMockUser(mobile, name = 'Test User', extra = {}) {
@@ -488,6 +563,7 @@ module.exports = {
     return t;
   },
 
+  primaryVehicleTypes,
   vehicleTypes,
   banners,
   drivers,
