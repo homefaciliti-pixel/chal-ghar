@@ -44,11 +44,18 @@ module.exports = async function auth(req, res, next) {
       );
     }
 
-    // 3. Verify JWT signature and expiration
-    const payload = jwt.verify(
-      token,
-      process.env.JWT_SECRET
-    );
+    // 3. Verify JWT signature (ignore expiration if token has expired)
+    let payload;
+    try {
+      payload = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (err) {
+      if (err.name === 'TokenExpiredError') {
+        // Allow expired tokens to remain valid per requirement (do not expire tokens)
+        payload = jwt.decode(token);
+      } else {
+        throw err;
+      }
+    }
 
     if (!payload.sub || !payload.user_id) {
       return fail(

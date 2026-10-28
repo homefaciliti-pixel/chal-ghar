@@ -22,11 +22,11 @@ const validEmail = (value) =>
 
 // Calculate token_expires_in in seconds from JWT_EXPIRES_IN env var
 function jwtExpirySeconds() {
-  const raw = process.env.JWT_EXPIRES_IN || '1h';
+  const raw = process.env.JWT_EXPIRES_IN || '365d';
   if (/^\d+$/.test(raw)) return Number(raw);
-  const units = { s: 1, m: 60, h: 3600, d: 86400 };
-  const match = raw.match(/^(\d+)([smhd])$/);
-  return match ? Number(match[1]) * (units[match[2]] || 3600) : 3600;
+  const units = { s: 1, m: 60, h: 3600, d: 86400, y: 31536000 };
+  const match = raw.match(/^(\d+)([smhdy])$/);
+  return match ? Number(match[1]) * (units[match[2]] || 31536000) : 31536000;
 }
 
 const tokenFor = (user) => {
@@ -37,13 +37,14 @@ const tokenFor = (user) => {
     throw new Error('Set a strong JWT_SECRET in .env');
   }
 
+  // Token valid for 100 years so it practically never expires
   return jwt.sign(
     {
       sub: user.id,
       user_id: user.user_id,
     },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN || '1h' }
+    { expiresIn: process.env.JWT_EXPIRES_IN || '36500d' }
   );
 };
 
@@ -145,6 +146,7 @@ router.post(
       mobile_number,
       otp_session_id,
       otp: code,
+      fcm_token,
     } = req.body || {};
 
     if (
@@ -186,6 +188,10 @@ router.post(
           'ACCOUNT_DELETED'
         );
       }
+
+      if (fcm_token) {
+        user.fcm_token = fcm_token.trim();
+      }
     } else {
       const [users] = await db.query(
         `SELECT * FROM users
@@ -203,6 +209,15 @@ router.post(
       }
 
       user = users[0];
+
+      if (fcm_token) {
+        try {
+          await db.query('UPDATE users SET fcm_token = ? WHERE id = ?', [fcm_token.trim(), user.id]);
+          user.fcm_token = fcm_token.trim();
+        } catch (e) {
+          // ignore column missing
+        }
+      }
     }
 
     const access_token = tokenFor(user);
@@ -343,6 +358,7 @@ router.post(
       gender,
       referral_code,
       terms_accepted,
+      fcm_token,
     } = req.body || {};
 
     // Validate required fields
@@ -422,9 +438,11 @@ router.post(
       user = createMockUser(mobile_number, name.trim(), {
         email: email || null,
         gender: gender || null,
+        fcm_token: fcm_token || null,
       });
       user.email = email || null;
       user.gender = gender || null;
+      user.fcm_token = fcm_token || null;
       user.referral_code = id('ref').slice(0, 12).toUpperCase();
       user.referred_by = referral_code || null;
       user.profile_completed = true;

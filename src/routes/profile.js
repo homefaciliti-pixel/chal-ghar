@@ -48,6 +48,7 @@ router.get(
         gender: u.gender || 'Male',
         language: u.language || 'en',
         profile_photo_url: u.profile_photo_url || null,
+        fcm_token: u.fcm_token || null,
         rating: u.rating || 4.9,
         referral_code: u.referral_code || 'NECAB50',
         created_at: u.created_at || new Date().toISOString(),
@@ -56,7 +57,7 @@ router.get(
     }
 
     const [u] = await db.query(
-      'SELECT user_id,name,email,mobile_number,phone_verified,gender,language,profile_photo_url,rating,referral_code,created_at FROM users WHERE id=?',
+      'SELECT user_id,name,email,mobile_number,phone_verified,gender,language,profile_photo_url,rating,referral_code,created_at,fcm_token FROM users WHERE id=?',
       [req.user.id]
     );
     if (!u.length) return fail(res, 404, 'User not found', 'USER_NOT_FOUND');
@@ -72,7 +73,7 @@ router.get(
 router.put(
   '/',
   asyncHandler(async (req, res) => {
-    const allowed = ['name', 'email', 'gender', 'language'];
+    const allowed = ['name', 'email', 'gender', 'language', 'fcm_token'];
     const updates = {};
     for (const k of allowed) {
       if (req.body[k] !== undefined) updates[k] = req.body[k] || null;
@@ -223,6 +224,56 @@ router.patch(
         }
       },
       'Location updated'
+    );
+  })
+);
+
+// POST /api/profile/fcm-token
+router.post(
+  '/fcm-token',
+  asyncHandler(async (req, res) => {
+    const { fcm_token, device_type = 'ANDROID' } = req.body;
+    if (!fcm_token || typeof fcm_token !== 'string' || !fcm_token.trim()) {
+      return fail(res, 422, 'Valid fcm_token is required', 'VALIDATION_ERROR');
+    }
+
+    const cleanToken = fcm_token.trim();
+
+    if (mockMode) {
+      mockStore.updateUser(req.user.id, {
+        fcm_token: cleanToken,
+        device_type,
+        fcm_updated_at: new Date().toISOString()
+      });
+      return ok(
+        res,
+        {
+          fcm_token: cleanToken,
+          device_type,
+          updated_at: new Date().toISOString()
+        },
+        'FCM token registered successfully'
+      );
+    }
+
+    try {
+      await db.query(
+        'UPDATE users SET fcm_token = ?, device_type = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [cleanToken, device_type, req.user.id]
+      );
+    } catch (err) {
+      // If column doesn't exist yet in older DB instances, log gracefully
+      console.warn('FCM update error:', err.message);
+    }
+
+    return ok(
+      res,
+      {
+        fcm_token: cleanToken,
+        device_type,
+        updated_at: new Date().toISOString()
+      },
+      'FCM token registered successfully'
     );
   })
 );

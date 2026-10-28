@@ -341,6 +341,7 @@ module.exports = {
       gender: extra.gender || null,
       language: extra.language || 'en',
       profile_photo_url: null,
+      fcm_token: extra.fcm_token || null,
       rating: 5.0,
       referral_code: id('ref').slice(0, 12).toUpperCase(),
       is_active: true,
