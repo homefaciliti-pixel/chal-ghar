@@ -11,6 +11,9 @@ const errorHandler = require('./middleware/error');
 
 const app = express();
 
+// Trust reverse proxy headers (required for Render, Heroku, Cloudflare)
+app.set('trust proxy', 1);
+
 // ================================
 // SECURITY MIDDLEWARE
 // ================================
