@@ -20,13 +20,9 @@ const validEmail = (value) =>
   typeof value === 'string' &&
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
-// Calculate token_expires_in in seconds from JWT_EXPIRES_IN env var
+// Tokens do not expire
 function jwtExpirySeconds() {
-  const raw = process.env.JWT_EXPIRES_IN || '365d';
-  if (/^\d+$/.test(raw)) return Number(raw);
-  const units = { s: 1, m: 60, h: 3600, d: 86400, y: 31536000 };
-  const match = raw.match(/^(\d+)([smhdy])$/);
-  return match ? Number(match[1]) * (units[match[2]] || 31536000) : 31536000;
+  return null;
 }
 
 const tokenFor = (user) => {
@@ -37,14 +33,13 @@ const tokenFor = (user) => {
     throw new Error('Set a strong JWT_SECRET in .env');
   }
 
-  // Token valid for 100 years so it practically never expires
+  // Token without expiresIn never expires
   return jwt.sign(
     {
       sub: user.id,
       user_id: user.user_id,
     },
-    process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN || '36500d' }
+    process.env.JWT_SECRET
   );
 };
 
