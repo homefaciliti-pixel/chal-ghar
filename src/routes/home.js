@@ -109,6 +109,9 @@ router.get(
           }
         : null;
 
+    const [uRow] = await db.query('SELECT fcm_token, device_type FROM users WHERE id = ?', [req.user.id]);
+    const currentUser = uRow[0] || {};
+
     return ok(res, {
       location: { latitude: lat, longitude: lng, address: null, city_id: cityId, is_serviceable: !!city.length },
       vehicle_types: v,
@@ -116,6 +119,8 @@ router.get(
       latest_ride: mapRide(latest[0]),
       active_ride: active[0] || null,
       unread_notifications: unread[0].count,
+      fcm_token: currentUser.fcm_token || null,
+      device_type: currentUser.device_type || null,
       wallet_balance: wallet[0].balance
     });
   })

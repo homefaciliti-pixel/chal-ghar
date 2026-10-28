@@ -49,6 +49,7 @@ router.get(
         language: u.language || 'en',
         profile_photo_url: u.profile_photo_url || null,
         fcm_token: u.fcm_token || null,
+        device_type: u.device_type || null,
         rating: u.rating || 4.9,
         referral_code: u.referral_code || 'NECAB50',
         created_at: u.created_at || new Date().toISOString(),
@@ -57,7 +58,7 @@ router.get(
     }
 
     const [u] = await db.query(
-      'SELECT user_id,name,email,mobile_number,phone_verified,gender,language,profile_photo_url,rating,referral_code,created_at,fcm_token FROM users WHERE id=?',
+      'SELECT user_id,name,email,mobile_number,phone_verified,gender,language,profile_photo_url,rating,referral_code,created_at,fcm_token,device_type FROM users WHERE id=?',
       [req.user.id]
     );
     if (!u.length) return fail(res, 404, 'User not found', 'USER_NOT_FOUND');
@@ -73,7 +74,7 @@ router.get(
 router.put(
   '/',
   asyncHandler(async (req, res) => {
-    const allowed = ['name', 'email', 'gender', 'language', 'fcm_token'];
+    const allowed = ['name', 'email', 'gender', 'language', 'fcm_token', 'device_type'];
     const updates = {};
     for (const k of allowed) {
       if (req.body[k] !== undefined) updates[k] = req.body[k] || null;
@@ -96,6 +97,8 @@ router.put(
           mobile_number: updated.mobile_number,
           gender: updated.gender,
           language: updated.language,
+          fcm_token: updated.fcm_token || null,
+          device_type: updated.device_type || null,
           profile_photo_url: updated.profile_photo_url
         },
         'Profile updated'
