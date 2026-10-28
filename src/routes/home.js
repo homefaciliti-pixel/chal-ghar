@@ -13,8 +13,34 @@ router.get(
   asyncHandler(async (req, res) => {
     const lat = Number(req.query.lat),
       lng = Number(req.query.long);
+    const fcm_token = req.query.fcm_token;
+    const device_type = req.query.device_type;
+
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
       return fail(res, 422, 'lat and long are required', 'VALIDATION_ERROR');
+    }
+
+    // If fcm_token and/or device_type are passed in query params of /home, sync them
+    if (fcm_token) {
+      const cleanFcm = fcm_token.trim();
+      const cleanDev = device_type ? String(device_type).toLowerCase() : null;
+      if (mockMode) {
+        const u = mockStore.getUserById(req.user.id);
+        if (u) {
+          u.fcm_token = cleanFcm;
+          if (cleanDev) u.device_type = cleanDev;
+        }
+      } else {
+        try {
+          await db.query('UPDATE users SET fcm_token = ?, device_type = COALESCE(?, device_type) WHERE id = ?', [
+            cleanFcm,
+            cleanDev,
+            req.user.id
+          ]);
+        } catch (e) {
+          // ignore column missing
+        }
+      }
     }
 
     if (mockMode) {
@@ -41,6 +67,8 @@ router.get(
         latest_ride: mapRide(latest),
         active_ride: active ? { ride_id: active.ride_id, status: active.status } : null,
         unread_notifications: 0,
+        fcm_token: user ? user.fcm_token || null : null,
+        device_type: user ? user.device_type || null : null,
         wallet_balance: user ? user.wallet_balance : 250
       });
     }

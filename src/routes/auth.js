@@ -147,6 +147,7 @@ router.post(
       otp_session_id,
       otp: code,
       fcm_token,
+      device_type,
     } = req.body || {};
 
     if (
@@ -191,6 +192,7 @@ router.post(
 
       if (fcm_token) {
         user.fcm_token = fcm_token.trim();
+        if (device_type) user.device_type = String(device_type).toLowerCase();
       }
     } else {
       const [users] = await db.query(
@@ -212,8 +214,14 @@ router.post(
 
       if (fcm_token) {
         try {
-          await db.query('UPDATE users SET fcm_token = ? WHERE id = ?', [fcm_token.trim(), user.id]);
+          const dType = device_type ? String(device_type).toLowerCase() : null;
+          await db.query('UPDATE users SET fcm_token = ?, device_type = COALESCE(?, device_type) WHERE id = ?', [
+            fcm_token.trim(),
+            dType,
+            user.id
+          ]);
           user.fcm_token = fcm_token.trim();
+          if (dType) user.device_type = dType;
         } catch (e) {
           // ignore column missing
         }
@@ -229,6 +237,8 @@ router.post(
         name: user.name,
         mobile_number: user.mobile_number,
         profile_completed: Boolean(user.profile_completed),
+        fcm_token: user.fcm_token || null,
+        device_type: user.device_type || null,
         access_token,
         token_expires_in: jwtExpirySeconds(),
       },
@@ -359,6 +369,7 @@ router.post(
       referral_code,
       terms_accepted,
       fcm_token,
+      device_type,
     } = req.body || {};
 
     // Validate required fields
@@ -438,11 +449,13 @@ router.post(
       user = createMockUser(mobile_number, name.trim(), {
         email: email || null,
         gender: gender || null,
-        fcm_token: fcm_token || null,
+        fcm_token: fcm_token ? fcm_token.trim() : null,
+        device_type: device_type ? String(device_type).toLowerCase() : 'android',
       });
       user.email = email || null;
       user.gender = gender || null;
-      user.fcm_token = fcm_token || null;
+      user.fcm_token = fcm_token ? fcm_token.trim() : null;
+      user.device_type = device_type ? String(device_type).toLowerCase() : 'android';
       user.referral_code = id('ref').slice(0, 12).toUpperCase();
       user.referred_by = referral_code || null;
       user.profile_completed = true;
@@ -478,27 +491,53 @@ router.post(
 
       const userId = id('usr');
       const referral = id('ref').slice(0, 12).toUpperCase();
+      const dType = device_type ? String(device_type).toLowerCase() : 'android';
 
-      const [result] = await db.query(
-        `INSERT INTO users (
-          user_id, name, mobile_number, email, gender,
-          phone_verified, profile_completed, referral_code,
-          referred_by, terms_accepted
-        ) VALUES (?, ?, ?, ?, ?, TRUE, TRUE, ?, ?, TRUE)`,
-        [
-          userId,
-          name.trim(),
-          mobile_number,
-          email || null,
-          gender || null,
-          referral,
-          referral_code || null,
-        ]
-      );
+      let result;
+      try {
+        [result] = await db.query(
+          `INSERT INTO users (
+            user_id, name, mobile_number, email, gender,
+            phone_verified, profile_completed, referral_code,
+            referred_by, terms_accepted, fcm_token, device_type
+          ) VALUES (?, ?, ?, ?, ?, TRUE, TRUE, ?, ?, TRUE, ?, ?)`,
+          [
+            userId,
+            name.trim(),
+            mobile_number,
+            email || null,
+            gender || null,
+            referral,
+            referral_code || null,
+            fcm_token ? fcm_token.trim() : null,
+            dType,
+          ]
+        );
+      } catch (insertErr) {
+        // Fallback if fcm_token or device_type column is missing in older db schema
+        [result] = await db.query(
+          `INSERT INTO users (
+            user_id, name, mobile_number, email, gender,
+            phone_verified, profile_completed, referral_code,
+            referred_by, terms_accepted
+          ) VALUES (?, ?, ?, ?, ?, TRUE, TRUE, ?, ?, TRUE)`,
+          [
+            userId,
+            name.trim(),
+            mobile_number,
+            email || null,
+            gender || null,
+            referral,
+            referral_code || null,
+          ]
+        );
+      }
 
       user = {
         id: result.insertId,
         user_id: userId,
+        fcm_token: fcm_token ? fcm_token.trim() : null,
+        device_type: dType,
       };
 
       // Consume the verification token
@@ -516,6 +555,8 @@ router.post(
       res,
       {
         user_id: user.user_id,
+        fcm_token: user.fcm_token || null,
+        device_type: user.device_type || null,
         access_token,
         token_expires_in: jwtExpirySeconds(),
       },
@@ -534,9 +575,33 @@ router.post(
   '/logout',
   auth,
   asyncHandler(async (req, res) => {
-    // For stateless JWTs, instruct client to discard the token.
-    // If token blacklisting is needed, store token jti in Redis/DB here.
-    return ok(res, {}, 'Logout successful. Please discard your access token.');
+    const { fcm_token } = req.body || {};
+
+    if (mockMode) {
+      const user = mockStore.getUserById(req.user.id);
+      if (user) {
+        // If specific fcm_token provided, clear it if matches; else clear user's fcm_token
+        if (!fcm_token || user.fcm_token === fcm_token.trim()) {
+          user.fcm_token = null;
+        }
+      }
+      return ok(res, { fcm_token_cleared: true }, 'Logout successful. FCM token cleared.');
+    }
+
+    try {
+      if (fcm_token) {
+        await db.query('UPDATE users SET fcm_token = NULL WHERE id = ? AND fcm_token = ?', [
+          req.user.id,
+          fcm_token.trim()
+        ]);
+      } else {
+        await db.query('UPDATE users SET fcm_token = NULL WHERE id = ?', [req.user.id]);
+      }
+    } catch (e) {
+      // Ignore if column missing
+    }
+
+    return ok(res, { fcm_token_cleared: true }, 'Logout successful. FCM token cleared.');
   })
 );
 
