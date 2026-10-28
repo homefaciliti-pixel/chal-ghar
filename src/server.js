@@ -93,6 +93,8 @@ app.use(['/api/profile', '/profile'], require('./routes/profile'));
 
 app.use(['/api/support', '/support'], require('./routes/support'));
 
+app.use(['/api/notifications', '/notifications'], require('./routes/notifications'));
+
 app.use(['/api/webhooks', '/webhooks'], require('./routes/webhooks'));
 
 app.use(['/api', '/'], require('./routes/home'));

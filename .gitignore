@@ -4,3 +4,6 @@ npm-debug.log*
 coverage/
 .DS_Store
 cab-user-backend/
+firebase-service-account*.json
+*service-account*.json
+src/config/firebase-service-account.json
